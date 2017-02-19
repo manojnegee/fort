@@ -1,4 +1,10 @@
-@extends('layouts.app')
+{{-- Master Layout --}}
+@extends('rinvex/fort::frontend/common.layout')
+
+{{-- Page Title --}}
+@section('title')
+    {{ config('app.name') }} » {{ trans('rinvex/fort::forms.common.verification_phone_request') }}
+@stop
 
 {{-- Main Content --}}
 @section('content')
@@ -6,22 +12,21 @@
     <div class="container">
         <div class="row">
             <div class="col-md-8 col-md-offset-2">
-                <div class="panel panel-default">
-                    <div class="panel-heading">{{ trans('rinvex.fort::frontend/forms.verification.phone.request.heading') }}</div>
+                <section class="panel panel-default">
+                    <header class="panel-heading">{{ trans('rinvex/fort::forms.common.verification_phone_request') }}</header>
+
                     <div class="panel-body">
+                        {{ Form::open(['route' => 'rinvex.fort.frontend.verification.phone.send', 'class' => 'form-horizontal']) }}
 
-                        <form class="form-horizontal" role="form" method="POST" action="{{ route('rinvex.fort.frontend.verification.phone.post') }}">
-                            {{ csrf_field() }}
-
-                            @include('rinvex.fort::frontend.alerts.success')
-                            @include('rinvex.fort::frontend.alerts.warning')
-                            @include('rinvex.fort::frontend.alerts.error')
+                            @include('rinvex/fort::frontend/alerts.success')
+                            @include('rinvex/fort::frontend/alerts.warning')
+                            @include('rinvex/fort::frontend/alerts.error')
 
                             <div class="form-group{{ $errors->has('phone') ? ' has-error' : '' }}">
-                                <label for="phone" class="col-md-4 control-label">{{ trans('rinvex.fort::frontend/forms.verification.phone.request.phone') }}</label>
+                                {{ Form::label('phone', trans('rinvex/fort::forms.common.phone'), ['class' => 'col-md-4 control-label']) }}
 
                                 <div class="col-md-6">
-                                    <input id="phone" name="phone" type="phone" class="form-control" value="{{ old('phone', auth()->guest() ? '' : $currentUser->phone) }}" placeholder="{{ trans('rinvex.fort::frontend/forms.verification.phone.request.phone') }}" required autofocus>
+                                    {{ Form::text('phone', old('phone', auth()->guest() ? '' : $currentUser->phone), ['class' => 'form-control', 'placeholder' => trans('rinvex/fort::forms.common.phone'), 'required' => 'required', 'autofocus' => 'autofocus']) }}
 
                                     @if ($errors->has('phone'))
                                         <span class="help-block">
@@ -32,16 +37,16 @@
                             </div>
 
                             <div class="form-group{{ $errors->has('method') ? ' has-error' : '' }}">
-                                <label class="col-md-4 control-label">Verification Method</label>
+                                {{ Form::label('phone', trans('rinvex/fort::forms.common.verification_method'), ['class' => 'col-md-4 control-label']) }}
 
                                 <div class="col-md-6">
 
                                     <div class="btn-group" data-toggle="buttons">
                                         <label for="sms" class="btn btn-default active">
-                                            <input id="sms" name="method" type="radio" value="sms" autocomplete="off" checked> SMS
+                                            <input id="sms" name="method" type="radio" value="sms" autocomplete="off" checked> {{ trans('rinvex/fort::forms.common.sms') }}
                                         </label>
                                         <label for="call" class="btn btn-default">
-                                            <input id="call" name="method" type="radio" value="call" autocomplete="off"> Voice Call
+                                            <input id="call" name="method" type="radio" value="call" autocomplete="off"> {{ trans('rinvex/fort::forms.common.call') }}
                                         </label>
                                     </div>
 
@@ -55,15 +60,14 @@
 
                             <div class="row">
                                 <div class="col-md-12 col-sm-12 col-xs-12 text-center">
-
-                                    <button type="submit" class="btn btn-primary"><i class="fa fa-btn fa-phone"></i> {{ trans('rinvex.fort::frontend/forms.verification.phone.request.submit') }}</button>
-
+                                    {{ Form::button('<i class="fa fa-phone"></i> '.trans('rinvex/fort::forms.common.verification_phone_request'), ['class' => 'btn btn-primary', 'type' => 'submit']) }}
+                                    {{ Form::reset(trans('rinvex/fort::forms.common.reset'), ['class' => 'btn btn-default']) }}
                                 </div>
                             </div>
 
-                        </form>
+                        {{ Form::close() }}
                     </div>
-                </div>
+                </section>
             </div>
         </div>
     </div>

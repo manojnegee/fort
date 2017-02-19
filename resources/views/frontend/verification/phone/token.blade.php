@@ -1,4 +1,10 @@
-@extends('layouts.app')
+{{-- Master Layout --}}
+@extends('rinvex/fort::frontend/common.layout')
+
+{{-- Page Title --}}
+@section('title')
+    {{ config('app.name') }} » {{ trans('rinvex/fort::forms.common.verify_phone') }}
+@stop
 
 {{-- Main Content --}}
 @section('content')
@@ -10,32 +16,27 @@
                 <section class="panel panel-default">
 
                     <header class="panel-heading">
-                        {{ trans('rinvex.fort::frontend/forms.verification.phone.verify.heading') }}
+                        {{ trans('rinvex/fort::forms.common.verify_phone') }}
                     </header>
 
                     <div class="panel-body">
+                        {{ Form::open(['route' => 'rinvex.fort.frontend.verification.phone.process', 'class' => 'form-horizontal']) }}
 
-                        {{-- Form --}}
-                        <form id="rinvex-fort-user-account-form" class="form-horizontal" role="form" method="POST" action="{{ route('rinvex.fort.frontend.verification.phone.verify.post') }}">
-
-                            {{-- Form: CSRF Token --}}
-                            {{ csrf_field() }}
-
-                            @include('rinvex.fort::frontend.alerts.success')
-                            @include('rinvex.fort::frontend.alerts.warning')
-                            @include('rinvex.fort::frontend.alerts.error')
+                            @include('rinvex/fort::frontend/alerts.success')
+                            @include('rinvex/fort::frontend/alerts.warning')
+                            @include('rinvex/fort::frontend/alerts.error')
 
                             <div class="form-group{{ $errors->has('token') ? ' has-error' : '' }}">
-                                <label for="token" class="col-md-4 control-label">{{ trans('rinvex.fort::frontend/forms.verification.phone.verify.token') }}</label>
+                                {{ Form::label('token', trans('rinvex/fort::forms.common.authentication_code'), ['class' => 'col-md-4 control-label']) }}
 
                                 <div class="col-md-6">
-                                    <input id="token" name="token" type="text" value="{{ old('token') }}" class="form-control" placeholder="Authentication Code" required autofocus>
-                                    {{ trans('rinvex.fort::frontend/forms.verification.phone.verify.backup_notice') }}<br />
+                                    {{ Form::text('token', old('token'), ['class' => 'form-control', 'placeholder' => trans('rinvex/fort::forms.common.authentication_code'), 'required' => 'required', 'autofocus' => 'autofocus']) }}
+                                    {{ trans('rinvex/fort::forms.twofactor.backup_notice') }}<br />
 
                                     @if ($methods['phone'])
-                                        <strong>{!! trans('rinvex.fort::frontend/forms.verification.phone.verify.backup_sms', ['href' => route('rinvex.fort.frontend.verification.phone')]) !!}</strong>
+                                        <strong>{!! trans('rinvex/fort::forms.twofactor.backup_sms', ['href' => route('rinvex.fort.frontend.verification.phone.request')]) !!}</strong>
                                     @else
-                                        <strong>{{ trans('rinvex.fort::frontend/forms.verification.phone.verify.backup') }}</strong>
+                                        <strong>{{ trans('rinvex/fort::forms.twofactor.backup_code') }}</strong>
                                     @endif
 
                                     @if ($errors->has('token'))
@@ -48,14 +49,12 @@
 
                             <div class="row">
                                 <div class="col-md-12 col-sm-12 col-xs-12 text-center">
-
-                                    <button type="submit" class="btn btn-primary"><i class="fa fa-btn fa-check"></i> {{ trans('rinvex.fort::frontend/forms.verification.phone.verify.submit') }}</button>
-
+                                    {{ Form::button('<i class="fa fa-check"></i> '.trans('rinvex/fort::forms.common.verify_phone'), ['class' => 'btn btn-primary', 'type' => 'submit']) }}
+                                    {{ Form::reset(trans('rinvex/fort::forms.common.reset'), ['class' => 'btn btn-default']) }}
                                 </div>
                             </div>
 
-                        </form>
-
+                        {{ Form::close() }}
                     </div>
                 </section>
             </div>

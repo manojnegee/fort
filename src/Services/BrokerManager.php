@@ -47,12 +47,10 @@ class BrokerManager implements BrokerManagerContract
      *
      * @param \Illuminate\Foundation\Application $app
      * @param string                             $type
-     *
-     * @return void
      */
     public function __construct($app, $type)
     {
-        $this->app  = $app;
+        $this->app = $app;
         $this->type = $type;
     }
 
@@ -73,16 +71,15 @@ class BrokerManager implements BrokerManagerContract
      *
      * @throws \InvalidArgumentException
      *
-     * @return \Rinvex\Fort\Contracts\ResetBrokerContract|\Rinvex\Fort\Contracts\VerificationBrokerContract
+     * @return \Rinvex\Fort\Contracts\PasswordResetBrokerContract|\Rinvex\Fort\Contracts\EmailVerificationBrokerContract
      */
     protected function resolve($name)
     {
-        $config      = $this->getConfig($name);
-        $type        = ucfirst(strtolower($this->type));
-        $brokerClass = "Rinvex\\Fort\\Services\\{$type}Broker";
+        $config = $this->getConfig($name);
+        $brokerClass = "Rinvex\\Fort\\Services\\{$this->type}Broker";
 
         if (is_null($config)) {
-            throw new InvalidArgumentException("{$type} broker [{$name}] is not defined.");
+            throw new InvalidArgumentException("{$this->type} broker [{$name}] is not defined.");
         }
 
         // The broker uses a token repository to validate tokens and send user
@@ -96,14 +93,13 @@ class BrokerManager implements BrokerManagerContract
      *
      * @param array $config
      *
-     * @return \Rinvex\Fort\Contracts\ResetTokenRepositoryContract|\Rinvex\Fort\Contracts\VerificationTokenRepositoryContract
+     * @return \Rinvex\Fort\Contracts\PasswordResetTokenRepositoryContract|\Rinvex\Fort\Contracts\EmailVerificationTokenRepositoryContract
      */
     protected function createTokenRepository(array $config)
     {
-        $key        = $this->app['config']['app.key'];
-        $type       = ucfirst(strtolower($this->type));
-        $table      = str_plural(strtolower($this->type));
-        $tokenClass = "Rinvex\\Fort\\Repositories\\{$type}TokenRepository";
+        $key = $this->app['config']['app.key'];
+        $table = str_plural(strtolower(snake_case($this->type)));
+        $tokenClass = "Rinvex\\Fort\\Repositories\\{$this->type}TokenRepository";
         $connection = isset($config['connection']) ? $config['connection'] : null;
 
         if (Str::startsWith($key, 'base64:')) {

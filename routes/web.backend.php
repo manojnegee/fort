@@ -23,14 +23,8 @@
 |
 */
 
-Route::group([
-    'prefix'     => 'backend',
-    'middleware' => ['web', 'can:access-dashboard'],
-    'as'         => 'rinvex.fort.backend.',
-    'namespace'  => 'Rinvex\Fort\Http\Controllers\Backend',
-], function () {
-    Route::get('/', ['as' => 'dashboard.home', 'uses' => 'DashboardController@home']);
-
+Route::namespace('Rinvex\Fort\Http\Controllers\Backend')->name('rinvex.fort.backend.')->prefix('backend')->middleware(['web', 'can:access-dashboard'])->group(function () {
+    Route::get('/')->name('dashboard.home')->uses('DashboardController@home');
 
     /*
     |--------------------------------------------------------------------------
@@ -38,26 +32,14 @@ Route::group([
     |--------------------------------------------------------------------------
     */
 
-    Route::group(['as' => 'abilities.', 'prefix' => 'abilities'], function () {
-        Route::get('/', ['as' => 'index', 'uses' => 'AbilitiesController@index']);
-        Route::post('/', ['as' => 'bulk', 'uses' => 'AbilitiesController@bulk']);
-
-        Route::post('import', ['as' => 'import', 'uses' => 'AbilitiesController@import']);
-        Route::post('export', ['as' => 'export', 'uses' => 'AbilitiesController@export']);
-
-        Route::get('{ability}', ['as' => 'show', 'uses' => 'AbilitiesController@show']);
-
-        Route::get('{ability}/copy', ['as' => 'copy', 'uses' => 'AbilitiesController@copy']);
-
-        Route::get('{ability}/edit', ['as' => 'edit', 'uses' => 'AbilitiesController@edit']);
-        Route::post('{ability}/edit', ['as' => 'update', 'uses' => 'AbilitiesController@update']);
-
-        Route::get('create', ['as' => 'create', 'uses' => 'AbilitiesController@create']);
-        Route::post('create', ['as' => 'store', 'uses' => 'AbilitiesController@store']);
-
-        Route::delete('{ability}', ['as' => 'destroy', 'uses' => 'AbilitiesController@destroy']);
+    Route::name('abilities.')->prefix('abilities')->group(function () {
+        Route::get('/')->name('index')->uses('AbilitiesController@index');
+        Route::get('create')->name('create')->uses('AbilitiesController@create');
+        Route::post('create')->name('store')->uses('AbilitiesController@store');
+        Route::get('{ability}')->name('edit')->uses('AbilitiesController@edit')->where('ability', '[0-9]+');
+        Route::put('{ability}')->name('update')->uses('AbilitiesController@update')->where('ability', '[0-9]+');
+        Route::delete('{ability}')->name('delete')->uses('AbilitiesController@delete')->where('ability', '[0-9]+');
     });
-
 
     /*
     |--------------------------------------------------------------------------
@@ -65,26 +47,14 @@ Route::group([
     |--------------------------------------------------------------------------
     */
 
-    Route::group(['as' => 'roles.', 'prefix' => 'roles'], function () {
-        Route::get('/', ['as' => 'index', 'uses' => 'RolesController@index']);
-        Route::post('/', ['as' => 'bulk', 'uses' => 'RolesController@bulk']);
-
-        Route::post('import', ['as' => 'import', 'uses' => 'RolesController@import']);
-        Route::post('export', ['as' => 'export', 'uses' => 'RolesController@export']);
-
-        Route::get('{role}', ['as' => 'show', 'uses' => 'RolesController@show']);
-
-        Route::get('{role}/copy', ['as' => 'copy', 'uses' => 'RolesController@copy']);
-
-        Route::get('{role}/edit', ['as' => 'edit', 'uses' => 'RolesController@edit']);
-        Route::post('{role}/edit', ['as' => 'update', 'uses' => 'RolesController@update']);
-
-        Route::get('create', ['as' => 'create', 'uses' => 'RolesController@create']);
-        Route::post('create', ['as' => 'store', 'uses' => 'RolesController@store']);
-
-        Route::delete('{role}', ['as' => 'destroy', 'uses' => 'RolesController@destroy']);
+    Route::name('roles.')->prefix('roles')->group(function () {
+        Route::get('/')->name('index')->uses('RolesController@index');
+        Route::get('create')->name('create')->uses('RolesController@create');
+        Route::post('create')->name('store')->uses('RolesController@store');
+        Route::get('{role}')->name('edit')->uses('RolesController@edit')->where('role', '[0-9]+');
+        Route::put('{role}')->name('update')->uses('RolesController@update')->where('role', '[0-9]+');
+        Route::delete('{role}')->name('delete')->uses('RolesController@delete')->where('role', '[0-9]+');
     });
-
 
     /*
     |--------------------------------------------------------------------------
@@ -92,23 +62,12 @@ Route::group([
     |--------------------------------------------------------------------------
     */
 
-    Route::group(['as' => 'users.', 'prefix' => 'users'], function () {
-        Route::get('/', ['as' => 'index', 'uses' => 'UsersController@index']);
-        Route::post('/', ['as' => 'bulk', 'uses' => 'UsersController@bulk']);
-
-        Route::post('import', ['as' => 'import', 'uses' => 'UsersController@import']);
-        Route::post('export', ['as' => 'export', 'uses' => 'UsersController@export']);
-
-        Route::get('{user}', ['as' => 'show', 'uses' => 'UsersController@show']);
-
-        Route::get('{user}/copy', ['as' => 'copy', 'uses' => 'UsersController@copy']);
-
-        Route::get('{user}/edit', ['as' => 'edit', 'uses' => 'UsersController@edit']);
-        Route::post('{user}/edit', ['as' => 'update', 'uses' => 'UsersController@update']);
-
-        Route::get('create', ['as' => 'create', 'uses' => 'UsersController@create']);
-        Route::post('create', ['as' => 'store', 'uses' => 'UsersController@store']);
-
-        Route::delete('{user}', ['as' => 'destroy', 'uses' => 'UsersController@destroy']);
+    Route::name('users.')->prefix('users')->group(function () {
+        Route::get('/')->name('index')->uses('UsersController@index');
+        Route::get('create')->name('create')->uses('UsersController@create');
+        Route::post('create')->name('store')->uses('UsersController@store');
+        Route::get('{user}')->name('edit')->uses('UsersController@edit')->where('user', '[0-9]+');
+        Route::put('{user}')->name('update')->uses('UsersController@update')->where('user', '[0-9]+');
+        Route::delete('{user}')->name('delete')->uses('UsersController@delete')->where('user', '[0-9]+');
     });
 });

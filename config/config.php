@@ -127,11 +127,11 @@ return [
         | Specify your database table name that should be used to store
         | your abilities. You may use whatever you like.
         |
-        | Default: "rinvex_fort_abilities"
+        | Default: "abilities"
         |
         */
 
-        'abilities' => 'rinvex_fort_abilities',
+        'abilities' => 'abilities',
 
         /*
         |--------------------------------------------------------------------------
@@ -141,11 +141,11 @@ return [
         | Specify database table name that should be used to store
         | your roles. You may use whatever you like.
         |
-        | Default: "rinvex_fort_roles"
+        | Default: "roles"
         |
         */
 
-        'roles' => 'rinvex_fort_roles',
+        'roles' => 'roles',
 
         /*
         |--------------------------------------------------------------------------
@@ -155,11 +155,11 @@ return [
         | Specify database table name that should be used to store
         | your users. You may use whatever you like.
         |
-        | Default: "rinvex_fort_users"
+        | Default: "users"
         |
         */
 
-        'users' => 'rinvex_fort_users',
+        'users' => 'users',
 
         /*
         |--------------------------------------------------------------------------
@@ -169,11 +169,11 @@ return [
         | Specify database table name that should be used to store the relation
         | between "users" and "abilities". You may use whatever you like.
         |
-        | Default: "rinvex_fort_ability_user"
+        | Default: "ability_user"
         |
         */
 
-        'ability_user' => 'rinvex_fort_ability_user',
+        'ability_user' => 'ability_user',
 
         /*
         |--------------------------------------------------------------------------
@@ -183,12 +183,11 @@ return [
         | Specify database table name that should be used to store the relation
         | between "users" and "roles". You may use whatever you like.
         |
-        | Default: "rinvex_fort_role_user"
+        | Default: "role_user"
         |
         */
 
-        'role_user' => 'rinvex_fort_role_user',
-
+        'role_user' => 'role_user',
 
         /*
         |--------------------------------------------------------------------------
@@ -198,39 +197,39 @@ return [
         | Specify database table name that should be used to store the relation
         | between "roles" and "abilities". You may use  whatever you like.
         |
-        | Default: "rinvex_fort_ability_role"
+        | Default: "ability_role"
         |
         */
 
-        'ability_role' => 'rinvex_fort_ability_role',
+        'ability_role' => 'ability_role',
 
         /*
         |--------------------------------------------------------------------------
-        | Verifications Table
+        | Email Verifications Table
         |--------------------------------------------------------------------------
         |
         | Specify database table name that should be used to store the
-        | verification tokens. You may use whatever you like.
+        | email verification tokens. You may use whatever you like.
         |
-        | Default: "rinvex_fort_verifications"
+        | Default: "email_verifications"
         |
         */
 
-        'verifications' => 'rinvex_fort_verifications',
+        'email_verifications' => 'email_verifications',
 
         /*
         |--------------------------------------------------------------------------
-        | Reset Password Tokens Table
+        | Password Reset Tokens Table
         |--------------------------------------------------------------------------
         |
         | Specify database table name that should be used to store the
-        | reset password tokens. You may use whatever you like.
+        | password reset tokens. You may use whatever you like.
         |
-        | Default: "rinvex_fort_resets"
+        | Default: "password_resets"
         |
         */
 
-        'resets' => 'rinvex_fort_resets',
+        'password_resets' => 'password_resets',
 
         /*
         |--------------------------------------------------------------------------
@@ -240,25 +239,25 @@ return [
         | Specify database table name that should be used to store the
         | user persistences. You may use whatever you like.
         |
-        | Default: "rinvex_fort_persistences"
+        | Default: "persistences"
         |
         */
 
-        'persistences' => 'rinvex_fort_persistences',
+        'persistences' => 'persistences',
 
         /*
         |--------------------------------------------------------------------------
-        | Socialite Table
+        | Socialites Table
         |--------------------------------------------------------------------------
         |
         | Specify database table name that should be used to store the
         | user social accounts. You may use whatever you like.
         |
-        | Default: "rinvex_fort_socialite"
+        | Default: "socialites"
         |
         */
 
-        'socialite' => 'rinvex_fort_socialite',
+        'socialites' => 'socialites',
 
     ],
 
@@ -364,7 +363,22 @@ return [
     |
     */
 
-    'reset' => [
+    'passwordreset' => [
+
+        /*
+        |--------------------------------------------------------------------------
+        | Password Minimum Characters
+        |--------------------------------------------------------------------------
+        |
+        | This option controls the minimum characters for passwords in your
+        | application. You may change this default as required, but
+        | they're a perfect start for most applications.
+        |
+        | Default: 8
+        |
+        */
+
+        'minimum_characters' => 8,
 
         /*
         |--------------------------------------------------------------------------
@@ -405,7 +419,7 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    'verification' => [
+    'emailverification' => [
 
         /*
         |--------------------------------------------------------------------------
@@ -455,14 +469,14 @@ return [
 
         /*
         |--------------------------------------------------------------------------
-        | Send Verification Success Email
+        | Send Verification Success Notification
         |--------------------------------------------------------------------------
         |
         | Send verification success email to users upon completing email verification successfully.
         |
         */
 
-        'success_email' => true,
+        'success_notification' => true,
 
     ],
 
@@ -566,28 +580,6 @@ return [
 
         ],
 
-        /*
-        |--------------------------------------------------------------------------
-        | Two-Factor Providers
-        |--------------------------------------------------------------------------
-        |
-        | Here you may configure as many Two-Factor "providers" as you wish, and you
-        | may even configure multiple providers of the same provider. Defaults have
-        | been setup for each provider as an example of the required options.
-        |
-        */
-
-        'authy' => [
-
-            'mode' => env('AUTHY_MODE', 'live'),
-
-            'keys' => [
-                'live'    => env('AUTHY_KEYS_LIVE', ''),
-                'sandbox' => env('AUTHY_KEYS_SANDBOX', ''),
-            ],
-
-        ],
-
     ],
 
     /*
@@ -653,6 +645,24 @@ return [
 
     /*
      |--------------------------------------------------------------------------
+     | Protected Models
+     |--------------------------------------------------------------------------
+     |
+     | Model Ids of protected abilities, roles, users that no one can control
+     | (edit, delete, ..etc) except someone with "Super Admin" ability.
+     |
+     */
+
+    'protected' => [
+
+        'abilities' => [1],
+        'roles'     => [1],
+        'users'     => [1],
+
+    ],
+
+    /*
+     |--------------------------------------------------------------------------
      | Online Users Options
      |--------------------------------------------------------------------------
      */
@@ -681,24 +691,6 @@ return [
     'backend' => [
         'items_per_page'      => 2,
         'items_per_dashboard' => 2,
-    ],
-
-    /*
-     |--------------------------------------------------------------------------
-     | Protected Models
-     |--------------------------------------------------------------------------
-     |
-     | Model Ids of protected abilities, roles, users that no one can control
-     | (edit, delete, ..etc) except someone with "Super Admin" ability.
-     |
-     */
-
-    'protected' => [
-
-        'abilities' => [1],
-        'roles'     => [1],
-        'users'     => [1],
-
     ],
 
 ];

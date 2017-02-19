@@ -15,92 +15,98 @@
 
 namespace Rinvex\Fort\Http\Controllers\Frontend;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Rinvex\Fort\Guards\SessionGuard;
-use Rinvex\Fort\Http\Requests\PhoneVerification;
 use Rinvex\Fort\Http\Controllers\AbstractController;
-use Rinvex\Fort\Http\Requests\PhoneVerificationRequest;
+use Rinvex\Fort\Http\Requests\Frontend\PhoneVerificationRequest;
+use Rinvex\Fort\Http\Requests\Frontend\PhoneVerificationSendRequest;
 
 class PhoneVerificationController extends AbstractController
 {
     /**
      * Show the phone verification form.
      *
-     * @param \Rinvex\Fort\Http\Requests\PhoneVerificationRequest $request
+     * @param \Rinvex\Fort\Http\Requests\Frontend\PhoneVerificationSendRequest $request
      *
      * @return \Illuminate\Http\Response|\Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
      */
-    public function showPhoneVerificationRequest(PhoneVerificationRequest $request)
+    public function request(PhoneVerificationSendRequest $request)
     {
         // If Two-Factor authentication failed, remember Two-Factor persistence
         Auth::guard($this->getGuard())->rememberTwoFactor();
 
-        return view('rinvex.fort::frontend.verification.phone.request');
+        return view('rinvex/fort::frontend/verification.phone.request');
     }
 
     /**
      * Process the phone verification request form.
      *
-     * @param \Rinvex\Fort\Http\Requests\PhoneVerificationRequest $request
+     * @param \Rinvex\Fort\Http\Requests\Frontend\PhoneVerificationSendRequest $request
      *
      * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
      */
-    public function processPhoneVerificationRequest(PhoneVerificationRequest $request)
+    public function send(PhoneVerificationSendRequest $request)
     {
-        $status = app('rinvex.fort.verifier')
-            ->broker($this->getBroker())
-            ->sendPhoneVerification(Auth::guard($this->getGuard())->user(), $request->get('method')) ? 'sent' : 'failed';
+        // Send phone verification notification
+        $request->user($this->getGuard())->sendPhoneVerificationNotification(false, $request->get('method'));
 
         return intend([
-            'intended' => route('rinvex.fort.frontend.verification.phone.verify'),
-            'with'     => ['rinvex.fort.alert.success' => trans('rinvex.fort::frontend/messages.verification.phone.'.$status)],
+            'route' => 'rinvex.fort.frontend.verification.phone.verify',
+            'with'  => ['success' => trans('rinvex/fort::messages.verification.phone.sent')],
         ]);
     }
 
     /**
      * Show the phone verification form.
      *
-     * @param \Rinvex\Fort\Http\Requests\PhoneVerification $request
+     * @param \Rinvex\Fort\Http\Requests\Frontend\PhoneVerificationRequest $request
      *
      * @return \Illuminate\Http\Response|\Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
      */
-    public function showPhoneVerification(PhoneVerification $request)
+    public function verify(PhoneVerificationRequest $request)
     {
         // If Two-Factor authentication failed, remember Two-Factor persistence
         Auth::guard($this->getGuard())->rememberTwoFactor();
 
         $methods = session('rinvex.fort.twofactor.methods');
 
-        return view('rinvex.fort::frontend.verification.phone.token', compact('methods'));
+        return view('rinvex/fort::frontend/verification.phone.token', compact('methods'));
     }
 
     /**
      * Process the phone verification form.
      *
-     * @param \Rinvex\Fort\Http\Requests\PhoneVerification $request
+     * @param \Rinvex\Fort\Http\Requests\Frontend\PhoneVerificationRequest $request
      *
      * @return \Illuminate\Http\Response|\Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
      */
-    public function processPhoneVerification(PhoneVerification $request)
+    public function process(PhoneVerificationRequest $request)
     {
-        $guard  = $this->getGuard();
-        $token  = $request->get('token');
-        $user   = Auth::guard($guard)->user();
+        $guard = $this->getGuard();
+        $token = $request->get('token');
+        $user = session('rinvex.fort.twofactor.user') ?: $request->user($guard);
         $result = Auth::guard($guard)->attemptTwoFactor($user, $token);
 
         switch ($result) {
             case SessionGuard::AUTH_PHONE_VERIFIED:
+                // Update user account
+                $user->update([
+                    'phone_verified'    => true,
+                    'phone_verified_at' => new Carbon(),
+                ]);
+
                 return intend([
-                    'intended' => route('rinvex.fort.frontend.account.page'),
-                    'with'     => ['rinvex.fort.alert.success' => trans($result)],
+                    'route' => 'rinvex.fort.frontend.user.settings',
+                    'with'  => ['success' => trans($result)],
                 ]);
 
             case SessionGuard::AUTH_LOGIN:
                 Auth::guard($guard)->login($user, session('rinvex.fort.twofactor.remember'), session('rinvex.fort.twofactor.persistence'));
 
                 return intend([
-                    'intended' => url('/'),
-                    'with'     => ['rinvex.fort.alert.success' => trans($result)],
+                    'url' => '/',
+                    'with' => ['success' => trans($result)],
                 ]);
 
             case SessionGuard::AUTH_TWOFACTOR_FAILED:

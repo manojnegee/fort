@@ -16,8 +16,9 @@
 namespace Rinvex\Fort\Http\Controllers\Backend;
 
 use Illuminate\Http\Request;
+use Rinvex\Fort\Models\Role;
 use Rinvex\Fort\Models\User;
-use Rinvex\Fort\Contracts\UserRepositoryContract;
+use Rinvex\Fort\Models\Ability;
 use Rinvex\Fort\Http\Controllers\AuthorizedController;
 
 class UsersController extends AuthorizedController
@@ -25,31 +26,7 @@ class UsersController extends AuthorizedController
     /**
      * {@inheritdoc}
      */
-    protected $resourceAbilityMap = [
-        'activate'   => 'activate',
-        'deactivate' => 'deactivate',
-    ];
-
-    /**
-     * The user repository instance.
-     *
-     * @var \Rinvex\Fort\Contracts\UserRepositoryContract
-     */
-    protected $userRepository;
-
-    /**
-     * Create a new users controller instance.
-     *
-     * @return void
-     */
-    public function __construct(UserRepositoryContract $userRepository)
-    {
-        parent::__construct();
-
-        $this->authorizeResource(User::class);
-
-        $this->userRepository = $userRepository;
-    }
+    protected $resource = 'users';
 
     /**
      * Display a listing of the resource.
@@ -58,29 +35,9 @@ class UsersController extends AuthorizedController
      */
     public function index()
     {
-        //
-    }
+        $users = User::paginate(config('rinvex.fort.backend.items_per_page'));
 
-    /**
-     * Display the specified resource.
-     *
-     * @param int $id
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function show($id)
-    {
-        //
-    }
-
-    /**
-     * Bulk control the given resources.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function bulk()
-    {
-        //
+        return view('rinvex/fort::backend/users.index', compact('users'));
     }
 
     /**
@@ -90,7 +47,19 @@ class UsersController extends AuthorizedController
      */
     public function create()
     {
-        //
+        return $this->form('create', 'store', new User());
+    }
+
+    /**
+     * Show the form for editing the given resource.
+     *
+     * @param \Rinvex\Fort\Models\User $user
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function edit(User $user)
+    {
+        return $this->form('edit', 'update', $user);
     }
 
     /**
@@ -102,75 +71,99 @@ class UsersController extends AuthorizedController
      */
     public function store(Request $request)
     {
-        //
-    }
-
-    /**
-     * Show the form for copying the given resource.
-     *
-     * @param int $id
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function copy($id)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the given resource.
-     *
-     * @param int $id
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function edit($id)
-    {
-        //
+        return $this->process($request, new User());
     }
 
     /**
      * Update the given resource in storage.
      *
      * @param \Illuminate\Http\Request $request
-     * @param int                      $id
+     * @param \Rinvex\Fort\Models\User $user
      *
      * @return \Illuminate\Http\Response
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, User $user)
     {
-        //
+        return $this->process($request, $user);
     }
 
     /**
      * Delete the given resource from storage.
      *
-     * @param int $id
+     * @param \Rinvex\Fort\Models\User $user
      *
      * @return \Illuminate\Http\Response
      */
-    public function destroy($id)
+    public function delete(User $user)
     {
-        //
+        $user->delete();
+
+        return intend([
+            'route' => 'rinvex.fort.backend.users.index',
+            'with'  => ['warning' => trans('rinvex/fort::messages.user.deleted', ['userId' => $user->id])],
+        ]);
     }
 
     /**
-     * Import the given resources into storage.
+     * Show the form for create/update of the given resource.
+     *
+     * @param string                   $mode
+     * @param string                   $action
+     * @param \Rinvex\Fort\Models\User $user
      *
      * @return \Illuminate\Http\Response
      */
-    public function import()
+    protected function form($mode, $action, User $user)
     {
-        //
+        $countries = array_map(function ($country) {
+            return $country['name'];
+        }, countries());
+
+        $abilityList = Ability::all()->groupBy('resource')->map(function ($item) {
+            return $item->pluck('name', 'id');
+        })->toArray();
+
+        $roleList = Role::all()->pluck('name', 'id')->toArray();
+
+        return view('rinvex/fort::backend/users.form', compact('user', 'abilityList', 'roleList', 'countries', 'mode', 'action'));
     }
 
     /**
-     * Export the given resources from storage.
+     * Process the form for store/update of the given resource.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @param \Rinvex\Fort\Models\User $user
      *
      * @return \Illuminate\Http\Response
      */
-    public function export()
+    protected function process(Request $request, User $user)
     {
-        //
+        // Prepare required input fields
+        $input = $request->all();
+        $input['email_verified'] = $request->get('email_verified', false);
+        $input['phone_verified'] = $request->get('phone_verified', false);
+
+        // Remove empty password fields
+        if (! $input['password']) {
+            unset($input['password']);
+        }
+
+        // Save user
+        ! $user->exists ? $user = $user->create($input) : $user->update($input);
+
+        // Sync abilities
+        if ($request->user($this->getGuard())->can('grant-abilities')) {
+            $user->abilities()->sync((array) array_pull($input, 'abilityList'));
+        }
+
+        // Sync roles
+        if ($request->user($this->getGuard())->can('assign-roles')) {
+            $user->roles()->sync((array) array_pull($input, 'roleList'));
+        }
+
+        return intend([
+            'route' => 'rinvex.fort.backend.users.index',
+            'with'  => ['success' => trans('rinvex/fort::messages.user.saved', ['userId' => $user->id])],
+        ]);
     }
 }

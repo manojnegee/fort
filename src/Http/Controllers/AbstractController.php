@@ -18,20 +18,11 @@ namespace Rinvex\Fort\Http\Controllers;
 use Illuminate\Routing\Controller;
 use Rinvex\Fort\Traits\GetsMiddleware;
 use Illuminate\Foundation\Bus\DispatchesJobs;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 abstract class AbstractController extends Controller
 {
-    use AuthorizesRequests, DispatchesJobs, GetsMiddleware;
-
-    /**
-     * Resource Ability Map.
-     *
-     * Array of resource ability map.
-     *
-     * @var array
-     */
-    protected $resourceAbilityMap = [];
+    use GetsMiddleware;
+    use DispatchesJobs;
 
     /**
      * Whitelisted methods.
@@ -43,7 +34,7 @@ abstract class AbstractController extends Controller
     protected $middlewareWhitelist = [];
 
     /**
-     * The password broker.
+     * The broker name.
      *
      * @var string
      */
@@ -57,26 +48,5 @@ abstract class AbstractController extends Controller
     protected function getBroker()
     {
         return $this->broker;
-    }
-
-    /**
-     * Get the map of resource methods to ability names.
-     *
-     * @return array
-     */
-    protected function resourceAbilityMap()
-    {
-        return $this->resourceAbilityMap + [
-            'show'    => 'view',
-            'index'   => 'view',
-            'import'  => 'import',
-            'export'  => 'export',
-            'copy'    => 'copy',
-            'create'  => 'create',
-            'store'   => 'create',
-            'edit'    => 'update',
-            'update'  => 'update',
-            'destroy' => 'delete',
-        ];
     }
 }

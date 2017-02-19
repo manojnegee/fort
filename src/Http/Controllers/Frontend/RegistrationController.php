@@ -15,17 +15,14 @@
 
 namespace Rinvex\Fort\Http\Controllers\Frontend;
 
-use Rinvex\Fort\Http\Requests\UserRegistration;
-use Rinvex\Fort\Contracts\UserRepositoryContract;
+use Rinvex\Fort\Models\User;
 use Rinvex\Fort\Http\Controllers\AbstractController;
-use Rinvex\Fort\Contracts\VerificationBrokerContract;
+use Rinvex\Fort\Http\Requests\Frontend\UserRegistrationRequest;
 
 class RegistrationController extends AbstractController
 {
     /**
      * Create a new registration controller instance.
-     *
-     * @return void
      */
     public function __construct()
     {
@@ -35,44 +32,52 @@ class RegistrationController extends AbstractController
     /**
      * Show the registration form.
      *
-     * @param \Rinvex\Fort\Http\Requests\UserRegistration $request
+     * @param \Rinvex\Fort\Http\Requests\Frontend\UserRegistrationRequest $request
      *
      * @return \Illuminate\Http\Response
      */
-    public function showRegisteration(UserRegistration $request)
+    public function form(UserRegistrationRequest $request)
     {
-        return view('rinvex.fort::frontend.authentication.register');
+        return view('rinvex/fort::frontend/authentication.register');
     }
 
     /**
      * Process the registration form.
      *
-     * @param \Rinvex\Fort\Http\Requests\UserRegistration   $request
-     * @param \Rinvex\Fort\Contracts\UserRepositoryContract $userRepository
+     * @param \Rinvex\Fort\Http\Requests\Frontend\UserRegistrationRequest $request
+     * @param \Rinvex\Fort\Models\User                                    $user
      *
      * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
      */
-    public function processRegisteration(UserRegistration $request, UserRepositoryContract $userRepository)
+    public function register(UserRegistrationRequest $request, User $user)
     {
-        $result = $userRepository->create($request->except('_token'));
+        // Prepare registration data
+        $input = $request->only(['username', 'email', 'password', 'password_confirmation']);
+        $active = ['active' => ! config('rinvex.fort.registration.moderated')];
 
-        switch ($result) {
+        // Fire the register start event
+        event('rinvex.fort.register.start', [$input + $active]);
+
+        $result = $user->create($input + $active);
+
+        // Fire the register success event
+        event('rinvex.fort.register.success', [$result]);
+
+        // Send verification if required
+        if (config('rinvex.fort.emailverification.required')) {
+            app('rinvex.fort.emailverification')->broker()->send(['email' => $input['email']]);
 
             // Registration completed, verification required
-            case VerificationBrokerContract::LINK_SENT:
-                return intend([
-                    'home' => true,
-                    'with' => ['rinvex.fort.alert.success' => trans('rinvex.fort::frontend/messages.register.success_verify')],
-                ]);
-
-            // Registration completed successfully
-            case UserRepositoryContract::AUTH_REGISTERED:
-            default:
-                return intend([
-                    'intended' => route('rinvex.fort.frontend.auth.login'),
-                    'with'     => ['rinvex.fort.alert.success' => trans($result)],
-                ]);
-
+            return intend([
+                'intended' => url('/'),
+                'with'     => ['success' => trans('rinvex/fort::messages.register.success_verify')],
+            ]);
         }
+
+        // Registration completed successfully
+        return intend([
+            'route' => 'rinvex.fort.frontend.auth.login',
+            'with'  => ['success' => trans('rinvex/fort::messages.register.success')],
+        ]);
     }
 }

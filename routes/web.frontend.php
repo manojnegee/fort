@@ -23,11 +23,7 @@
 |
 */
 
-Route::group([
-    'middleware' => 'web',
-    'as'         => 'rinvex.fort.frontend.',
-    'namespace'  => 'Rinvex\Fort\Http\Controllers\Frontend',
-], function () {
+Route::namespace('Rinvex\Fort\Http\Controllers\Frontend')->name('rinvex.fort.frontend.')->middleware('web')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
@@ -35,7 +31,7 @@ Route::group([
     |--------------------------------------------------------------------------
     */
 
-    Route::group(['as' => 'auth.', 'prefix' => 'auth'], function () {
+    Route::name('auth.')->prefix('auth')->group(function () {
 
         /*
         |--------------------------------------------------------------------------
@@ -43,9 +39,9 @@ Route::group([
         |--------------------------------------------------------------------------
         */
 
-        Route::get('login', ['as' => 'login', 'uses' => 'AuthenticationController@showLogin']);
-        Route::post('login', ['as' => 'login.post', 'uses' => 'AuthenticationController@processLogin']);
-        Route::post('logout', ['as' => 'logout', 'uses' => 'AuthenticationController@logout']);
+        Route::get('login')->name('login')->uses('AuthenticationController@form');
+        Route::post('login')->name('login.process')->uses('AuthenticationController@login');
+        Route::post('logout')->name('logout')->uses('AuthenticationController@logout');
 
         /*
         |--------------------------------------------------------------------------
@@ -53,8 +49,8 @@ Route::group([
         |--------------------------------------------------------------------------
         */
 
-        Route::get('register', ['as' => 'register', 'uses' => 'RegistrationController@showRegisteration']);
-        Route::post('register', ['as' => 'register.post', 'uses' => 'RegistrationController@processRegisteration']);
+        Route::get('register')->name('register')->uses('RegistrationController@form');
+        Route::post('register')->name('register.process')->uses('RegistrationController@register');
 
         /*
         |--------------------------------------------------------------------------
@@ -62,10 +58,9 @@ Route::group([
         |--------------------------------------------------------------------------
         */
 
-        Route::get('github', ['as' => 'social.github', 'uses' => 'SocialAuthenticationController@redirectToGithub']);
-        Route::get('github/callback', ['as' => 'social.github.callback', 'uses' => 'SocialAuthenticationController@handleGithubCallback']);
+        Route::get('github')->name('social.github')->uses('SocialAuthenticationController@redirectToGithub');
+        Route::get('github/callback')->name('social.github.callback')->uses('SocialAuthenticationController@handleGithubCallback');
     });
-
 
     /*
     |--------------------------------------------------------------------------
@@ -73,7 +68,7 @@ Route::group([
     |--------------------------------------------------------------------------
     */
 
-    Route::group(['as' => 'account.', 'prefix' => 'account'], function () {
+    Route::name('user.')->prefix('user')->group(function () {
 
         /*
         |--------------------------------------------------------------------------
@@ -81,8 +76,8 @@ Route::group([
         |--------------------------------------------------------------------------
         */
 
-        Route::get('page', ['as' => 'page', 'uses' => 'ProfileUpdateController@showProfileUpdate']);
-        Route::post('page', ['as' => 'page.post', 'uses' => 'ProfileUpdateController@processProfileUpdate']);
+        Route::get('settings')->name('settings')->uses('UserSettingsController@edit');
+        Route::post('settings')->name('settings.update')->uses('UserSettingsController@update');
 
         /*
         |--------------------------------------------------------------------------
@@ -90,9 +85,8 @@ Route::group([
         |--------------------------------------------------------------------------
         */
 
-        Route::get('sessions', ['as' => 'sessions', 'uses' => 'ManagePersistenceController@showPersistence']);
-        Route::get('sessions/flush/{token}', ['as' => 'sessions.flush', 'uses' => 'ManagePersistenceController@processPersistenceFlush'])->where('token', '[0-9a-zA-Z]+');
-        Route::get('sessions/flushall', ['as' => 'sessions.flushall', 'uses' => 'ManagePersistenceController@processPersistenceFlush']);
+        Route::get('sessions')->name('sessions')->uses('UserSessionsController@index');
+        Route::delete('sessions/{token?}')->name('sessions.flush')->uses('UserSessionsController@flush');
 
         /*
         |--------------------------------------------------------------------------
@@ -100,7 +94,7 @@ Route::group([
         |--------------------------------------------------------------------------
         */
 
-        Route::group(['as' => 'twofactor.', 'prefix' => 'twofactor'], function () {
+        Route::name('twofactor.')->prefix('twofactor')->group(function () {
 
             /*
             |--------------------------------------------------------------------------
@@ -108,11 +102,11 @@ Route::group([
             |--------------------------------------------------------------------------
             */
 
-            Route::group(['as' => 'totp.', 'prefix' => 'totp'], function () {
-                Route::get('enable', ['as' => 'enable', 'uses' => 'TwoFactorUpdateController@showTwoFactorTotpEnable']);
-                Route::post('enable', ['as' => 'enable.post', 'uses' => 'TwoFactorUpdateController@processTwoFactorTotpEnable']);
-                Route::get('disable', ['as' => 'disable', 'uses' => 'TwoFactorUpdateController@processTwoFactorTotpDisable']);
-                Route::get('backup', ['as' => 'backup', 'uses' => 'TwoFactorUpdateController@processTwoFactorTotpBackup']);
+            Route::name('totp.')->prefix('totp')->group(function () {
+                Route::get('enable')->name('enable')->uses('TwoFactorSettingsController@enableTotp');
+                Route::post('update')->name('update')->uses('TwoFactorSettingsController@updateTotp');
+                Route::get('disable')->name('disable')->uses('TwoFactorSettingsController@disableTotp');
+                Route::get('backup')->name('backup')->uses('TwoFactorSettingsController@backupTotp');
             });
 
             /*
@@ -121,41 +115,25 @@ Route::group([
             |--------------------------------------------------------------------------
             */
 
-            Route::group(['as' => 'phone.', 'prefix' => 'phone'], function () {
-                Route::get('enable', ['as' => 'enable', 'uses' => 'TwoFactorUpdateController@processTwoFactorPhoneEnable']);
-                Route::get('disable', ['as' => 'disable', 'uses' => 'TwoFactorUpdateController@processTwoFactorPhoneDisable']);
+            Route::name('phone.')->prefix('phone')->group(function () {
+                Route::get('enable')->name('enable')->uses('TwoFactorSettingsController@enablePhone');
+                Route::get('disable')->name('disable')->uses('TwoFactorSettingsController@disablePhone');
             });
         });
     });
 
-
     /*
     |--------------------------------------------------------------------------
-    | Password Routes
+    | Password Reset Routes
     |--------------------------------------------------------------------------
     */
 
-    Route::group(['as' => 'password.', 'prefix' => 'password'], function () {
-
-        /*
-        |--------------------------------------------------------------------------
-        | Forgot Password Routes
-        |--------------------------------------------------------------------------
-        */
-
-        Route::get('forgot', ['as' => 'forgot', 'uses' => 'ForgotPasswordController@showForgotPassword']);
-        Route::post('forgot', ['as' => 'forgot.post', 'uses' => 'ForgotPasswordController@processForgotPassword']);
-
-        /*
-        |--------------------------------------------------------------------------
-        | Reset Password Routes
-        |--------------------------------------------------------------------------
-        */
-
-        Route::get('reset', ['as' => 'reset', 'uses' => 'ResetPasswordController@showResetPassword']);
-        Route::post('reset', ['as' => 'reset.post', 'uses' => 'ResetPasswordController@processResetPassword']);
+    Route::name('passwordreset.')->prefix('passwordreset')->group(function () {
+        Route::get('request')->name('request')->uses('PasswordResetController@request');
+        Route::post('send')->name('send')->uses('PasswordResetController@send');
+        Route::get('reset')->name('reset')->uses('PasswordResetController@reset');
+        Route::post('process')->name('process')->uses('PasswordResetController@process');
     });
-
 
     /*
     |--------------------------------------------------------------------------
@@ -163,7 +141,7 @@ Route::group([
     |--------------------------------------------------------------------------
     */
 
-    Route::group(['as' => 'verification.', 'prefix' => 'verification'], function () {
+    Route::name('verification.')->prefix('verification')->group(function () {
 
         /*
         |--------------------------------------------------------------------------
@@ -171,10 +149,12 @@ Route::group([
         |--------------------------------------------------------------------------
         */
 
-        Route::get('phone', ['as' => 'phone', 'uses' => 'PhoneVerificationController@showPhoneVerificationRequest']);
-        Route::post('phone', ['as' => 'phone.post', 'uses' => 'PhoneVerificationController@processPhoneVerificationRequest']);
-        Route::get('phone/verify', ['as' => 'phone.verify', 'uses' => 'PhoneVerificationController@showPhoneVerification']);
-        Route::post('phone/verify', ['as' => 'phone.verify.post', 'uses' => 'PhoneVerificationController@processPhoneVerification']);
+        Route::name('phone.')->prefix('phone')->group(function () {
+            Route::get('request')->name('request')->uses('PhoneVerificationController@request');
+            Route::post('send')->name('send')->uses('PhoneVerificationController@send');
+            Route::get('verify')->name('verify')->uses('PhoneVerificationController@verify');
+            Route::post('process')->name('process')->uses('PhoneVerificationController@process');
+        });
 
         /*
         |--------------------------------------------------------------------------
@@ -182,8 +162,10 @@ Route::group([
         |--------------------------------------------------------------------------
         */
 
-        Route::get('email', ['as' => 'email', 'uses' => 'EmailVerificationController@showEmailVerificationRequest']);
-        Route::post('email', ['as' => 'email.post', 'uses' => 'EmailVerificationController@processEmailVerificationRequest']);
-        Route::get('email/verify', ['as' => 'email.verify', 'uses' => 'EmailVerificationController@processEmailVerification']);
+        Route::name('email.')->prefix('email')->group(function () {
+            Route::get('request')->name('request')->uses('EmailVerificationController@request');
+            Route::post('send')->name('send')->uses('EmailVerificationController@send');
+            Route::get('verify')->name('verify')->uses('EmailVerificationController@verify');
+        });
     });
 });

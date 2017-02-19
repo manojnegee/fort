@@ -150,9 +150,6 @@ class TwoFactorTotpProvider
      **/
     public function verifyKey($b32seed, $key, $window = 1, $useTimeStamp = true)
     {
-        // Fire the Two-Factor TOTP verify start event
-        event('rinvex.fort.twofactor.totp.verify.start', [$b32seed, $key]);
-
         $timeStamp = $this->getTimestamp();
 
         if ($useTimeStamp !== true) {
@@ -163,15 +160,9 @@ class TwoFactorTotpProvider
 
         for ($ts = $timeStamp - $window; $ts <= $timeStamp + $window; $ts++) {
             if (hash_equals($this->oathHotp($binarySeed, $ts), $key)) {
-                // Fire the Two-Factor TOTP verify success event
-                event('rinvex.fort.twofactor.totp.verify.success', [$b32seed, $key]);
-
                 return true;
             }
         }
-
-        // Fire the Two-Factor TOTP verify failed event
-        event('rinvex.fort.twofactor.totp.verify.failed', [$b32seed, $key]);
 
         return false;
     }
@@ -186,7 +177,7 @@ class TwoFactorTotpProvider
     public function oathTruncate($hash)
     {
         $offset = ord($hash[19]) & 0xf;
-        $temp   = unpack('N', substr($hash, $offset, 4));
+        $temp = unpack('N', substr($hash, $offset, 4));
 
         return substr($temp[1] & 0x7fffffff, -static::OPT_LENGTH);
     }
@@ -223,7 +214,7 @@ class TwoFactorTotpProvider
         $renderer->setHeight($size);
 
         $writer = new Writer($renderer);
-        $data   = $writer->writeString($url, $encoding);
+        $data = $writer->writeString($url, $encoding);
 
         return 'data:image/png;base64,'.base64_encode($data);
     }

@@ -22,6 +22,16 @@ class Persistence extends Model
     /**
      * {@inheritdoc}
      */
+    protected $primaryKey = 'token';
+
+    /**
+     * {@inheritdoc}
+     */
+    public $incrementing = false;
+
+    /**
+     * {@inheritdoc}
+     */
     protected $fillable = [
         'user_id',
         'token',
@@ -34,8 +44,6 @@ class Persistence extends Model
      * Create a new Eloquent model instance.
      *
      * @param array $attributes
-     *
-     * @return void
      */
     public function __construct(array $attributes = [])
     {
@@ -51,6 +59,6 @@ class Persistence extends Model
      */
     public function user()
     {
-        return $this->belongsTo(config('rinvex.fort.models.user'));
+        return $this->belongsTo(config('rinvex.fort.models.user'), 'user_id', 'id');
     }
 }

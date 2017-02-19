@@ -15,20 +15,22 @@
 
 namespace Rinvex\Fort\Providers;
 
+use Rinvex\Fort\Models\Role;
+use Rinvex\Fort\Models\User;
 use Illuminate\Routing\Router;
+use Rinvex\Fort\Models\Ability;
 use Illuminate\Support\Facades\Auth;
 use Rinvex\Fort\Guards\SessionGuard;
-use Rinvex\Fort\Services\BrokerManager;
-use Rinvex\Fort\Listeners\FortEventListener;
-use Illuminate\View\Compilers\BladeCompiler;
-use Rinvex\Fort\Repositories\UserRepository;
-use Rinvex\Fort\Repositories\RoleRepository;
-use Laravel\Socialite\SocialiteServiceProvider;
-use Rinvex\Fort\Repositories\AbilityRepository;
-use Rinvex\Support\Providers\BaseServiceProvider;
-use Rinvex\Fort\Repositories\PersistenceRepository;
+use Rinvex\Fort\Handlers\RoleHandler;
+use Rinvex\Fort\Handlers\UserHandler;
+use Illuminate\Support\ServiceProvider;
+use Rinvex\Fort\Handlers\AbilityHandler;
+use Rinvex\Fort\Handlers\GenericHandler;
+use Rinvex\Fort\Http\Middleware\Abilities;
+use Rinvex\Fort\Http\Middleware\Authenticate;
+use Rinvex\Fort\Http\Middleware\RedirectIfAuthenticated;
 
-class FortServiceProvider extends BaseServiceProvider
+class FortServiceProvider extends ServiceProvider
 {
     /**
      * {@inheritdoc}
@@ -38,16 +40,11 @@ class FortServiceProvider extends BaseServiceProvider
         // Merge config
         $this->mergeConfigFrom(realpath(__DIR__.'/../../config/config.php'), 'rinvex.fort');
 
-        // Register bindings
-        $this->registerRepositories();
-        $this->registerBrokerManagers();
-        $this->registerBladeExtensions();
+        // Override Exception Handler
+        $this->overrideExceptionHandler();
 
-        // Register the event listener
-        $this->app->bind('rinvex.fort.listener', FortEventListener::class);
-
-        // Register the Socialite Service Provider
-        $this->app->register(SocialiteServiceProvider::class);
+        // Register the deferred Fort Service Provider
+        $this->app->register(FortDeferredServiceProvider::class);
     }
 
     /**
@@ -55,107 +52,38 @@ class FortServiceProvider extends BaseServiceProvider
      */
     public function boot(Router $router)
     {
-        // Publish Resources
-        $this->publishResources();
+        // Override middlware
+        $this->overrideMiddleware($router);
 
         // Load routes
         $this->loadRoutes($router);
 
         // Load views
-        $this->loadViewsFrom(__DIR__.'/../../resources/views', 'rinvex.fort');
+        $this->loadViewsFrom(__DIR__.'/../../resources/views', 'rinvex/fort');
 
         // Load language phrases
-        $this->loadTranslationsFrom(__DIR__.'/../../resources/lang', 'rinvex.fort');
+        $this->loadTranslationsFrom(__DIR__.'/../../resources/lang', 'rinvex/fort');
 
-        // Load migrations
-        $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
+        if ($this->app->runningInConsole()) {
+            // Load migrations
+            $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
 
-        // Subscribe the registered event listener
-        $this->app['events']->subscribe('rinvex.fort.listener');
+            // Publish Resources
+            $this->publishResources();
+        }
 
-        // Add custom user provider
-        $this->addCustomUserProvider();
+        // Register event handlers
+        Role::observe(RoleHandler::class);
+        User::observe(UserHandler::class);
+        Ability::observe(AbilityHandler::class);
+        $this->app['events']->subscribe(GenericHandler::class);
 
-        // Add custom session guard
-        $this->addCustomSessionGuard();
+        // Override session guard
+        $this->overrideSessionGuard();
 
         // Share current user instance with all views
         $this->app['view']->composer('*', function ($view) {
             $view->with('currentUser', Auth::user());
-        });
-    }
-
-    /**
-     * Bind the repositories into the IoC.
-     *
-     * @return void
-     */
-    protected function registerRepositories()
-    {
-        $this->bindAndAlias('rinvex.fort.role', RoleRepository::class);
-        $this->bindAndAlias('rinvex.fort.user', UserRepository::class);
-        $this->bindAndAlias('rinvex.fort.ability', AbilityRepository::class);
-        $this->bindAndAlias('rinvex.fort.persistence', PersistenceRepository::class);
-    }
-
-    /**
-     * Register the broker managers.
-     *
-     * @return void
-     */
-    protected function registerBrokerManagers()
-    {
-        // Register reset broker manager
-        $this->app->singleton('rinvex.fort.resetter', function ($app) {
-            return new BrokerManager($app, 'reset');
-        });
-
-        // Register verification broker manager
-        $this->app->singleton('rinvex.fort.verifier', function ($app) {
-            return new BrokerManager($app, 'verification');
-        });
-    }
-
-    /**
-     * Register the blade extensions.
-     *
-     * @return void
-     */
-    protected function registerBladeExtensions()
-    {
-        $this->app->afterResolving('blade.compiler', function (BladeCompiler $bladeCompiler) {
-
-            // @role('writer')
-            $bladeCompiler->directive('role', function ($model, $role) {
-                return "<?php if(auth()->check() && app('rinvex.fort.user')->hasRole({$model}, {$role})): ?>";
-            });
-            $bladeCompiler->directive('endrole', function () {
-                return '<?php endif; ?>';
-            });
-
-            // @hasrole('writer')
-            $bladeCompiler->directive('hasrole', function ($model, $role) {
-                return "<?php if(auth()->check() && app('rinvex.fort.user')->hasRole({$model}, {$role})): ?>";
-            });
-            $bladeCompiler->directive('endhasrole', function () {
-                return '<?php endif; ?>';
-            });
-
-            // @hasanyrole(['writer', 'editor'])
-            $bladeCompiler->directive('hasanyrole', function ($model, $roles) {
-                return "<?php if(auth()->check() && app('rinvex.fort.user')->hasAnyRole({$model}, {$roles})): ?>";
-            });
-            $bladeCompiler->directive('endhasanyrole', function () {
-                return '<?php endif; ?>';
-            });
-
-            // @hasallroles(['writer', 'editor'])
-            $bladeCompiler->directive('hasallroles', function ($model, $roles) {
-                return "<?php if(auth()->check() && app('rinvex.fort.user')->hasAllRoles({$model}, {$roles})): ?>";
-            });
-            $bladeCompiler->directive('endhasallroles', function () {
-                return '<?php endif; ?>';
-            });
         });
     }
 
@@ -213,27 +141,14 @@ class FortServiceProvider extends BaseServiceProvider
     }
 
     /**
-     * Add custom user provider.
+     * Override session guard.
      *
      * @return void
      */
-    protected function addCustomUserProvider()
-    {
-        $this->app['auth']->provider('rinvex.fort.eloquent', function ($app, array $config) {
-            // Return an instance of Rinvex\Fort\Contracts\UserRepositoryContract
-            return $this->app['rinvex.fort.user'];
-        });
-    }
-
-    /**
-     * Add custom session guard.
-     *
-     * @return void
-     */
-    protected function addCustomSessionGuard()
+    protected function overrideSessionGuard()
     {
         // Add custom session guard
-        $this->app['auth']->extend('rinvex.fort.session', function ($app, $name, array $config) {
+        $this->app['auth']->extend('session', function ($app, $name, array $config) {
             $provider = $app['auth']->createUserProvider($config['provider']);
 
             $guard = new SessionGuard($name, $provider, $app['session.store'], $app['request']);
@@ -255,5 +170,35 @@ class FortServiceProvider extends BaseServiceProvider
 
             return $guard;
         });
+    }
+
+    /**
+     * Override middleware.
+     *
+     * @param \Illuminate\Routing\Router $router
+     *
+     * @return void
+     */
+    protected function overrideMiddleware(Router $router)
+    {
+        // Append abilities middleware to the 'web' middlware group
+        $router->pushMiddlewareToGroup('web', Abilities::class);
+
+        // Override route middleware on the fly
+        $router->aliasMiddleware('auth', Authenticate::class);
+        $router->aliasMiddleware('guest', RedirectIfAuthenticated::class);
+    }
+
+    /**
+     * Override exception handler.
+     *
+     * @return void
+     */
+    protected function overrideExceptionHandler()
+    {
+        $this->app->singleton(
+            \Illuminate\Contracts\Debug\ExceptionHandler::class,
+            \Rinvex\Fort\Exceptions\ExceptionHandler::class
+        );
     }
 }
