@@ -1,61 +1,59 @@
 <?php
 
-/*
- * NOTICE OF LICENSE
- *
- * Part of the Rinvex Fort Package.
- *
- * This source file is subject to The MIT License (MIT)
- * that is bundled with this package in the LICENSE file.
- *
- * Package: Rinvex Fort Package
- * License: The MIT License (MIT)
- * Link:    https://rinvex.com
- */
+declare(strict_types=1);
 
 namespace Rinvex\Fort\Services;
 
 use Closure;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use UnexpectedValueException;
 use Illuminate\Contracts\Auth\UserProvider;
 use Rinvex\Fort\Contracts\CanVerifyEmailContract;
 use Rinvex\Fort\Contracts\EmailVerificationBrokerContract;
-use Rinvex\Fort\Contracts\EmailVerificationTokenRepositoryContract;
 
 class EmailVerificationBroker implements EmailVerificationBrokerContract
 {
     /**
-     * The verification token repository.
+     * The application key.
      *
-     * @var \Rinvex\Fort\Contracts\EmailVerificationTokenRepositoryContract
+     * @var string
      */
-    protected $tokens;
+    protected $key;
 
     /**
      * The user provider implementation.
      *
      * @var \Illuminate\Contracts\Auth\UserProvider
      */
-    protected $userProvider;
+    protected $users;
+
+    /**
+     * The number of minutes that the reset token should be considered valid.
+     *
+     * @var int
+     */
+    protected $expiration;
 
     /**
      * Create a new verification broker instance.
      *
-     * @param \Rinvex\Fort\Contracts\EmailVerificationTokenRepositoryContract $tokens
-     * @param \Illuminate\Contracts\Auth\UserProvider                         $userProvider
+     * @param \Illuminate\Contracts\Auth\UserProvider $users
+     * @param string                                  $key
+     * @param int                                     $expiration
      */
-    public function __construct(EmailVerificationTokenRepositoryContract $tokens, UserProvider $userProvider)
+    public function __construct(UserProvider $users, $key, $expiration)
     {
-        $this->tokens = $tokens;
-        $this->userProvider = $userProvider;
+        $this->key = $key;
+        $this->users = $users;
+        $this->expiration = $expiration;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function send(array $credentials)
+    public function sendVerificationLink(array $credentials)
     {
         // First we will check to see if we found a user at the given credentials and
         // if we did not we will redirect back to this current URI with a piece of
@@ -64,13 +62,12 @@ class EmailVerificationBroker implements EmailVerificationBrokerContract
             return static::INVALID_USER;
         }
 
-        // Once we have the verification token, we are ready to send the message out
-        // to this user with a link for verification. We will then redirect back to
-        // the current URI having nothing set in the session to indicate errors.
-        $token = $this->tokens->getData($user, $this->tokens->create($user));
-        $expiration = $this->tokens->getExpiration();
+        $expiration = Carbon::now()->addMinutes($this->expiration)->timestamp;
 
-        $user->sendEmailVerificationNotification($token, $expiration);
+        // Once we have the verification token, we are ready to send the message out to
+        // this user with a link to verify their email. We will then redirect back to
+        // the current URI having nothing set in the session to indicate any errors
+        $user->sendEmailVerificationNotification($this->createToken($user, $expiration), $expiration);
 
         return static::LINK_SENT;
     }
@@ -78,36 +75,24 @@ class EmailVerificationBroker implements EmailVerificationBrokerContract
     /**
      * {@inheritdoc}
      */
-    public function verify(array $credentials, Closure $callback = null)
+    public function verify(array $credentials, Closure $callback)
     {
         // If the responses from the validate method is not a user instance, we will
         // assume that it is a redirect and simply return it from this method and
         // the user is properly redirected having an error message on the post.
-        if (is_null($user = $this->getUser($credentials))) {
-            return static::INVALID_USER;
-        }
+        $user = $this->validateVerification($credentials);
 
-        if (! $this->tokenExists($user, $credentials['token'])) {
-            return static::INVALID_TOKEN;
+        if (! $user instanceof CanVerifyEmailContract) {
+            return $user;
         }
 
         // Fire the email verification start event
         event('rinvex.fort.emailverification.start', [$user]);
 
-        // Verify email
-        $user->update([
-            'email_verified'    => true,
-            'email_verified_at' => new Carbon(),
-        ]);
-
-        // Once we have called this callback, we will remove this token row from the
-        // table and return the response from this callback so the user gets sent
-        // to the destination given by the developers from the callback return.
-        if (! is_null($callback)) {
-            $callback($user);
-        }
-
-        $this->deleteToken($credentials['token']);
+        // Once the email has been verified, we'll call the given
+        // callback, then we'll delete the token and return.
+        // in their persistent storage.
+        $callback($user);
 
         // Fire the email verification success event
         event('rinvex.fort.emailverification.success', [$user]);
@@ -126,9 +111,7 @@ class EmailVerificationBroker implements EmailVerificationBrokerContract
      */
     public function getUser(array $credentials)
     {
-        $credentials = Arr::except($credentials, ['token']);
-
-        $user = $this->userProvider->retrieveByCredentials($credentials);
+        $user = $this->users->retrieveByCredentials(Arr::only($credentials, ['email']));
 
         if ($user && ! $user instanceof CanVerifyEmailContract) {
             throw new UnexpectedValueException('User must implement CanVerifyEmailContract interface.');
@@ -138,37 +121,101 @@ class EmailVerificationBroker implements EmailVerificationBrokerContract
     }
 
     /**
-     * Delete the given verification token.
+     * Create a new email verification token for the given user.
      *
-     * @param string $token
+     * @param \Rinvex\Fort\Contracts\CanVerifyEmailContract $user
+     * @param int                                           $expiration
      *
-     * @return void
+     * @return string
      */
-    public function deleteToken($token)
+    public function createToken(CanVerifyEmailContract $user, $expiration)
     {
-        $this->tokens->delete($token);
+        $payload = $this->buildPayload($user, $user->getEmailForVerification(), $expiration);
+
+        return hash_hmac('sha256', $payload, $this->getKey());
     }
 
     /**
-     * Validate the given verification token.
+     * Validate the given email verification token.
      *
      * @param \Rinvex\Fort\Contracts\CanVerifyEmailContract $user
-     * @param string                                        $token
+     * @param array                                         $credentials
      *
      * @return bool
      */
-    public function tokenExists(CanVerifyEmailContract $user, $token)
+    public function validateToken(CanVerifyEmailContract $user, array $credentials)
     {
-        return $this->tokens->exists($user, $token);
+        $payload = $this->buildPayload($user, $credentials['email'], $credentials['expiration']);
+
+        return hash_equals($credentials['token'], hash_hmac('sha256', $payload, $this->getKey()));
     }
 
     /**
-     * Get the verification token repository implementation.
+     * Validate the given expiration timestamp.
      *
-     * @return \Rinvex\Fort\Contracts\EmailVerificationTokenRepositoryContract
+     * @param int $expiration
+     *
+     * @return bool
      */
-    public function getTokenRepository()
+    public function validateTimestamp($expiration)
     {
-        return $this->tokens;
+        return Carbon::createFromTimestamp($expiration)->isFuture();
+    }
+
+    /**
+     * Return the application key.
+     *
+     * @return string
+     */
+    public function getKey()
+    {
+        if (Str::startsWith($this->key, 'base64:')) {
+            return base64_decode(mb_substr($this->key, 7));
+        }
+
+        return $this->key;
+    }
+
+    /**
+     * Returns the payload string containing.
+     *
+     * @param \Rinvex\Fort\Contracts\CanVerifyEmailContract $user
+     * @param string                                        $email
+     * @param int                                           $expiration
+     *
+     * @return string
+     */
+    protected function buildPayload(CanVerifyEmailContract $user, $email, $expiration)
+    {
+        return implode(';', [
+            $email,
+            $expiration,
+            $user->getKey(),
+            $user->password,
+        ]);
+    }
+
+    /**
+     * Validate an email verification for the given credentials.
+     *
+     * @param array $credentials
+     *
+     * @return \Rinvex\Fort\Contracts\CanVerifyEmailContract|string
+     */
+    protected function validateVerification(array $credentials)
+    {
+        if (is_null($user = $this->getUser($credentials))) {
+            return static::INVALID_USER;
+        }
+
+        if (! $this->validateToken($user, $credentials)) {
+            return static::INVALID_TOKEN;
+        }
+
+        if (! $this->validateTimestamp($credentials['expiration'])) {
+            return static::EXPIRED_TOKEN;
+        }
+
+        return $user;
     }
 }

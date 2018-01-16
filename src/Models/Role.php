@@ -1,52 +1,41 @@
 <?php
 
-/*
- * NOTICE OF LICENSE
- *
- * Part of the Rinvex Fort Package.
- *
- * This source file is subject to The MIT License (MIT)
- * that is bundled with this package in the LICENSE file.
- *
- * Package: Rinvex Fort Package
- * License: The MIT License (MIT)
- * Link:    https://rinvex.com
- */
+declare(strict_types=1);
 
 namespace Rinvex\Fort\Models;
 
-use Spatie\Sluggable\HasSlug;
 use Spatie\Sluggable\SlugOptions;
+use Rinvex\Support\Traits\HasSlug;
 use Rinvex\Fort\Traits\HasAbilities;
-use Watson\Validating\ValidatingTrait;
-use Rinvex\Cacheable\CacheableEloquent;
 use Illuminate\Database\Eloquent\Model;
-use Spatie\Translatable\HasTranslations;
+use Rinvex\Cacheable\CacheableEloquent;
+use Rinvex\Fort\Contracts\RoleContract;
+use Rinvex\Support\Traits\HasTranslations;
+use Rinvex\Support\Traits\ValidatingTrait;
 
 /**
  * Rinvex\Fort\Models\Role.
  *
- * @property int                                                                         $id
- * @property string                                                                      $slug
- * @property string                                                                      $name
- * @property string                                                                      $description
- * @property \Carbon\Carbon                                                              $created_at
- * @property \Carbon\Carbon                                                              $updated_at
- * @property \Carbon\Carbon                                                              $deleted_at
- * @property-read \Illuminate\Database\Eloquent\Collection|\Rinvex\Fort\Models\Ability[] $abilities
- * @property-read \Illuminate\Database\Eloquent\Collection|\Rinvex\Fort\Models\User[]    $users
- * @property-read array                                                                  $ability_list
+ * @property int                                                                    $id
+ * @property string                                                                 $slug
+ * @property array                                                                  $name
+ * @property array                                                                  $description
+ * @property \Carbon\Carbon|null                                                    $created_at
+ * @property \Carbon\Carbon|null                                                    $updated_at
+ * @property \Carbon\Carbon|null                                                    $deleted_at
+ * @property \Illuminate\Database\Eloquent\Collection|\Rinvex\Fort\Models\Ability[] $abilities
+ * @property \Illuminate\Database\Eloquent\Collection|\Rinvex\Fort\Models\User[]    $users
  *
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Role whereId($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Role whereSlug($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Role whereTitle($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Role whereDescription($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Role whereCreatedAt($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Role whereUpdatedAt($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Role whereDeletedAt($value)
- * @mixin \Illuminate\Database\Eloquent\Model
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Role whereCreatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Role whereDeletedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Role whereDescription($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Role whereId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Role whereName($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Role whereSlug($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Role whereUpdatedAt($value)
+ * @mixin \Eloquent
  */
-class Role extends Model
+class Role extends Model implements RoleContract
 {
     use HasSlug;
     use HasAbilities;
@@ -61,17 +50,38 @@ class Role extends Model
         'slug',
         'name',
         'description',
+        'abilities',
+        'users',
     ];
 
     /**
      * {@inheritdoc}
      */
-    protected $with = ['abilities'];
+    protected $casts = [
+        'slug' => 'string',
+        'deleted_at' => 'datetime',
+    ];
 
     /**
      * {@inheritdoc}
      */
-    protected $observables = ['validating', 'validated'];
+    protected $with = [
+        'abilities',
+    ];
+
+    /**
+     * {@inheritdoc}
+     */
+    protected $observables = [
+        'attaching',
+        'attached',
+        'syncing',
+        'synced',
+        'detaching',
+        'detached',
+        'validating',
+        'validated',
+    ];
 
     /**
      * The attributes that are translatable.
@@ -91,7 +101,8 @@ class Role extends Model
     protected $rules = [];
 
     /**
-     * Whether the model should throw a ValidationException if it fails validation.
+     * Whether the model should throw a
+     * ValidationException if it fails validation.
      *
      * @var bool
      */
@@ -107,33 +118,44 @@ class Role extends Model
         parent::__construct($attributes);
 
         $this->setTable(config('rinvex.fort.tables.roles'));
-        $this->addObservableEvents(['attaching', 'attached', 'syncing', 'synced', 'detaching', 'detached']);
         $this->setRules([
-            'name' => 'required|string',
-            'description' => 'nullable|string',
-            'slug' => 'required|alpha_dash|unique:'.config('rinvex.fort.tables.roles').',slug',
+            'slug' => 'required|alpha_dash|max:150|unique:'.config('rinvex.fort.tables.roles').',slug',
+            'name' => 'required|string|max:150',
+            'description' => 'nullable|string|max:10000',
         ]);
     }
 
     /**
      * {@inheritdoc}
      */
-    public static function boot()
+    protected static function boot()
     {
         parent::boot();
 
-        if (isset(static::$dispatcher)) {
-            // Early auto generate slugs before validation
-            static::$dispatcher->listen('eloquent.validating: '.static::class, function ($model, $event) {
-                if (! $model->slug) {
-                    if ($model->exists) {
-                        $model->generateSlugOnCreate();
-                    } else {
-                        $model->generateSlugOnUpdate();
-                    }
-                }
-            });
-        }
+        static::updated(function (self $role) {
+            app('rinvex.fort.ability')->forgetCache();
+            app('rinvex.fort.user')->forgetCache();
+        });
+
+        static::deleted(function (self $role) {
+            app('rinvex.fort.ability')->forgetCache();
+            app('rinvex.fort.user')->forgetCache();
+        });
+
+        static::attached(function (self $role) {
+            app('rinvex.fort.ability')->forgetCache();
+            app('rinvex.fort.user')->forgetCache();
+        });
+
+        static::synced(function (self $role) {
+            app('rinvex.fort.ability')->forgetCache();
+            app('rinvex.fort.user')->forgetCache();
+        });
+
+        static::detached(function (self $role) {
+            app('rinvex.fort.ability')->forgetCache();
+            app('rinvex.fort.user')->forgetCache();
+        });
     }
 
     /**
@@ -226,54 +248,23 @@ class Role extends Model
      */
     public function users()
     {
-        return $this->belongsToMany(config('rinvex.fort.models.user'), config('rinvex.fort.tables.role_user'), 'role_id', 'user_id')
+        $userModel = config('auth.providers.'.config('auth.guards.'.config('auth.defaults.guard').'.provider').'.model');
+
+        return $this->belongsToMany($userModel, config('rinvex.fort.tables.role_user'), 'role_id', 'user_id')
                     ->withTimestamps();
     }
 
     /**
-     * Get the list of ability Ids.
+     * Get the options for generating the slug.
      *
-     * @return array
+     * @return \Spatie\Sluggable\SlugOptions
      */
-    public function getAbilityListAttribute()
+    public function getSlugOptions(): SlugOptions
     {
-        return $this->abilities->pluck('id')->toArray();
-    }
-
-    /**
-     * Set the translatable name attribute.
-     *
-     * @param string $value
-     *
-     * @return void
-     */
-    public function setNameAttribute($value)
-    {
-        $this->attributes['name'] = json_encode(! is_array($value) ? [app()->getLocale() => $value] : $value);
-    }
-
-    /**
-     * Set the translatable description attribute.
-     *
-     * @param string $value
-     *
-     * @return void
-     */
-    public function setDescriptionAttribute($value)
-    {
-        $this->attributes['description'] = ! empty($value) ? json_encode(! is_array($value) ? [app()->getLocale() => $value] : $value) : null;
-    }
-
-    /**
-     * Enforce clean slugs.
-     *
-     * @param string $value
-     *
-     * @return void
-     */
-    public function setSlugAttribute($value)
-    {
-        $this->attributes['slug'] = str_slug($value);
+        return SlugOptions::create()
+                          ->doNotGenerateSlugsOnUpdate()
+                          ->generateSlugsFrom('name')
+                          ->saveSlugsTo('slug');
     }
 
     /**
@@ -297,14 +288,30 @@ class Role extends Model
     }
 
     /**
-     * Get the options for generating the slug.
+     * Attach the role abilities.
      *
-     * @return \Spatie\Sluggable\SlugOptions
+     * @param mixed $abilities
+     *
+     * @return void
      */
-    public function getSlugOptions(): SlugOptions
+    public function setAbilitiesAttribute($abilities)
     {
-        return SlugOptions::create()
-                          ->generateSlugsFrom('name')
-                          ->saveSlugsTo('slug');
+        static::saved(function (self $model) use ($abilities) {
+            $model->abilities()->sync($abilities);
+        });
+    }
+
+    /**
+     * Attach the role users.
+     *
+     * @param mixed $users
+     *
+     * @return void
+     */
+    public function setUsersAttribute($users)
+    {
+        static::saved(function (self $model) use ($users) {
+            $model->users()->sync($users);
+        });
     }
 }

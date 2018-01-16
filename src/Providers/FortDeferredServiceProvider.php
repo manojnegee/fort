@@ -1,51 +1,33 @@
 <?php
 
-/*
- * NOTICE OF LICENSE
- *
- * Part of the Rinvex Fort Package.
- *
- * This source file is subject to The MIT License (MIT)
- * that is bundled with this package in the LICENSE file.
- *
- * Package: Rinvex Fort Package
- * License: The MIT License (MIT)
- * Link:    https://rinvex.com
- */
+declare(strict_types=1);
 
 namespace Rinvex\Fort\Providers;
 
-use Collective\Html\FormFacade;
-use Collective\Html\HtmlFacade;
-use Rinvex\Fort\Services\AccessGate;
-use Illuminate\Foundation\AliasLoader;
-use Rinvex\Fort\Services\BrokerManager;
 use Illuminate\Support\ServiceProvider;
-use Collective\Html\HtmlServiceProvider;
 use Illuminate\View\Compilers\BladeCompiler;
-use Laravel\Socialite\SocialiteServiceProvider;
-use Rinvex\Fort\Console\Commands\UserFindCommand;
-use Rinvex\Fort\Console\Commands\RoleFindCommand;
-use Rinvex\Fort\Console\Commands\RoleCreateCommand;
-use Rinvex\Fort\Console\Commands\RoleUpdateCommand;
-use Rinvex\Fort\Console\Commands\UserCreateCommand;
-use Rinvex\Fort\Console\Commands\UserRemindCommand;
-use Rinvex\Fort\Console\Commands\UserUpdateCommand;
-use Rinvex\Fort\Console\Commands\AbilityFindCommand;
-use Rinvex\Fort\Console\Commands\AbilityCreateCommand;
-use Rinvex\Fort\Console\Commands\AbilityUpdateCommand;
-use Rinvex\Fort\Console\Commands\UserAssignRoleCommand;
-use Rinvex\Fort\Console\Commands\UserRemoveRoleCommand;
-use Rinvex\Fort\Console\Commands\UserGiveAbilityCommand;
-use Rinvex\Fort\Console\Commands\RoleGiveAbilityCommand;
-use Illuminate\Contracts\Auth\Access\Gate as GateContract;
-use Rinvex\Fort\Console\Commands\RoleRevokeAbilityCommand;
-use Rinvex\Fort\Console\Commands\UserRevokeAbilityCommand;
-use Rinvex\Fort\Console\Commands\PasswordTokenClearCommand;
-use Rinvex\Fort\Console\Commands\VerificationTokenClearCommand;
+use Rinvex\Fort\Console\Commands\SeedCommand;
+use Rinvex\Fort\Console\Commands\MigrateCommand;
+use Rinvex\Fort\Console\Commands\PublishCommand;
+use Rinvex\Fort\Console\Commands\MakeAuthCommand;
+use Rinvex\Fort\Console\Commands\RollbackCommand;
+use Rinvex\Fort\Services\PasswordResetBrokerManager;
+use Rinvex\Fort\Services\EmailVerificationBrokerManager;
 
 class FortDeferredServiceProvider extends ServiceProvider
 {
+    /**
+     * The commands to be registered.
+     *
+     * @var array
+     */
+    protected $commands = [
+        SeedCommand::class => 'command.rinvex.fort.seed',
+        MigrateCommand::class => 'command.rinvex.fort.migrate',
+        PublishCommand::class => 'command.rinvex.fort.publish',
+        RollbackCommand::class => 'command.rinvex.fort.rollback',
+    ];
+
     /**
      * Indicates if loading of the provider is deferred.
      *
@@ -54,92 +36,58 @@ class FortDeferredServiceProvider extends ServiceProvider
     protected $defer = true;
 
     /**
-     * The commands to be registered.
-     *
-     * @var array
-     */
-    protected $commands = [
-
-        AbilityFindCommand::class,
-        AbilityUpdateCommand::class,
-        AbilityCreateCommand::class,
-
-        RoleFindCommand::class,
-        RoleUpdateCommand::class,
-        RoleCreateCommand::class,
-        RoleGiveAbilityCommand::class,
-        RoleRevokeAbilityCommand::class,
-
-        UserFindCommand::class,
-        UserCreateCommand::class,
-        UserUpdateCommand::class,
-        UserRemindCommand::class,
-        UserAssignRoleCommand::class,
-        UserRemoveRoleCommand::class,
-        UserGiveAbilityCommand::class,
-        UserRevokeAbilityCommand::class,
-
-        VerificationTokenClearCommand::class,
-        PasswordTokenClearCommand::class,
-
-    ];
-
-    /**
      * {@inheritdoc}
      */
     public function register()
     {
-        // Merge config
-        $this->mergeConfigFrom(realpath(__DIR__.'/../../config/config.php'), 'rinvex.fort');
-
-        // Register artisan commands
-        $this->commands($this->commands);
-
         // Register bindings
-        $this->registerAccessGate();
-        $this->registerBrokerManagers();
+        $this->registerPasswordBroker();
+        $this->registerVerificationBroker();
+
+        // Register console commands
+        ! $this->app->runningInConsole() || $this->registerCommands();
+    }
+
+    /**
+     * Bootstrap the application events.
+     *
+     * @return void
+     */
+    public function boot()
+    {
+        // Register blade extensions
         $this->registerBladeExtensions();
-
-        // Register the Socialite Service Provider
-        $this->app->register(SocialiteServiceProvider::class);
-
-        // Register the LaravelCollective HTML Service Provider
-        $this->app->register(HtmlServiceProvider::class);
-
-        // Alias the LaravelCollective Form & HTML Facades
-        AliasLoader::getInstance()->alias('Form', FormFacade::class);
-        AliasLoader::getInstance()->alias('Html', HtmlFacade::class);
     }
 
     /**
-     * Register the access gate service.
+     * Register the password broker.
      *
      * @return void
      */
-    protected function registerAccessGate()
+    protected function registerPasswordBroker()
     {
-        $this->app->singleton(GateContract::class, function ($app) {
-            return new AccessGate($app, function () use ($app) {
-                return call_user_func($app['auth']->userResolver());
-            });
+        $this->app->singleton('auth.password', function ($app) {
+            return new PasswordResetBrokerManager($app);
+        });
+
+        $this->app->bind('auth.password.broker', function ($app) {
+            return $app->make('auth.password')->broker();
         });
     }
 
     /**
-     * Register the broker managers.
+     * Register the verification broker.
      *
      * @return void
      */
-    protected function registerBrokerManagers()
+    protected function registerVerificationBroker()
     {
-        // Register reset broker manager
-        $this->app->singleton('rinvex.fort.passwordreset', function ($app) {
-            return new BrokerManager($app, 'PasswordReset');
-        });
-
-        // Register verification broker manager
         $this->app->singleton('rinvex.fort.emailverification', function ($app) {
-            return new BrokerManager($app, 'EmailVerification');
+            return new EmailVerificationBrokerManager($app);
+        });
+
+        $this->app->bind('rinvex.fort.emailverification.broker', function ($app) {
+            return $app->make('rinvex.fort.emailverification')->broker();
         });
     }
 
@@ -153,32 +101,32 @@ class FortDeferredServiceProvider extends ServiceProvider
         $this->app->afterResolving('blade.compiler', function (BladeCompiler $bladeCompiler) {
 
             // @role('writer') / @hasrole(['writer', 'editor'])
-            $bladeCompiler->directive('role', function ($roles) {
-                return "<?php if(auth()->user()->hasRole({$roles})): ?>";
+            $bladeCompiler->directive('role', function ($expression) {
+                return "<?php if(auth()->user()->hasRole({$expression})): ?>";
             });
             $bladeCompiler->directive('endrole', function () {
                 return '<?php endif; ?>';
             });
 
             // @hasrole('writer') / @hasrole(['writer', 'editor'])
-            $bladeCompiler->directive('hasrole', function ($roles) {
-                return "<?php if(auth()->user()->hasRole({$roles})): ?>";
+            $bladeCompiler->directive('hasrole', function ($expression) {
+                return "<?php if(auth()->user()->hasRole({$expression})): ?>";
             });
             $bladeCompiler->directive('endhasrole', function () {
                 return '<?php endif; ?>';
             });
 
             // @hasanyrole(['writer', 'editor'])
-            $bladeCompiler->directive('hasanyrole', function ($roles) {
-                return "<?php if(auth()->user()->hasAnyRole({$roles})): ?>";
+            $bladeCompiler->directive('hasanyrole', function ($expression) {
+                return "<?php if(auth()->user()->hasAnyRole({$expression})): ?>";
             });
             $bladeCompiler->directive('endhasanyrole', function () {
                 return '<?php endif; ?>';
             });
 
             // @hasallroles(['writer', 'editor'])
-            $bladeCompiler->directive('hasallroles', function ($roles) {
-                return "<?php if(auth()->user()->hasAllRoles({$roles})): ?>";
+            $bladeCompiler->directive('hasallroles', function ($expression) {
+                return "<?php if(auth()->user()->hasAllRoles({$expression})): ?>";
             });
             $bladeCompiler->directive('endhasallroles', function () {
                 return '<?php endif; ?>';
@@ -193,11 +141,34 @@ class FortDeferredServiceProvider extends ServiceProvider
      */
     public function provides()
     {
-        return array_keys($this->commands) + [
-                GateContract::class,
-                'rinvex.fort.passwordreset',
-                'rinvex.fort.emailverification',
-                \Illuminate\Contracts\Debug\ExceptionHandler::class,
-            ];
+        return [
+            'auth.password',
+            'rinvex.fort.emailverification',
+            \Illuminate\Contracts\Debug\ExceptionHandler::class,
+        ];
+    }
+
+    /**
+     * Register console commands.
+     *
+     * @return void
+     */
+    protected function registerCommands()
+    {
+        if (config('rinvex.fort.boot.override_makeauth_command')) {
+            $this->app->singleton('command.auth.make', function ($app) {
+                return new MakeAuthCommand();
+            });
+            $this->commands('command.auth.make');
+        }
+
+        // Register artisan commands
+        foreach ($this->commands as $key => $value) {
+            $this->app->singleton($value, function ($app) use ($key) {
+                return new $key();
+            });
+        }
+
+        $this->commands(array_values($this->commands));
     }
 }

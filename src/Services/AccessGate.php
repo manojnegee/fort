@@ -1,17 +1,6 @@
 <?php
 
-/*
- * NOTICE OF LICENSE
- *
- * Part of the Rinvex Fort Package.
- *
- * This source file is subject to The MIT License (MIT)
- * that is bundled with this package in the LICENSE file.
- *
- * Package: Rinvex Fort Package
- * License: The MIT License (MIT)
- * Link:    https://rinvex.com
- */
+declare(strict_types=1);
 
 namespace Rinvex\Fort\Services;
 
@@ -44,9 +33,9 @@ class AccessGate extends Gate
         if ($result) {
             return $this->allow();
         } else {
-            $message = $ability == 'null'
-                ? trans('rinvex/fort::messages.auth.authorize')
-                : trans('rinvex/fort::messages.auth.unauthorized');
+            $message = $ability === 'null'
+                ? 'Requested resource must be authorized.'
+                : 'Sorry, you do not have access to the requested resource!';
 
             throw new AuthorizationException($message, $ability, $arguments);
         }

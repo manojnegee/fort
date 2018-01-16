@@ -1,21 +1,8 @@
 <?php
 
-/*
- * NOTICE OF LICENSE
- *
- * Part of the Rinvex Fort Package.
- *
- * This source file is subject to The MIT License (MIT)
- * that is bundled with this package in the LICENSE file.
- *
- * Package: Rinvex Fort Package
- * License: The MIT License (MIT)
- * Link:    https://rinvex.com
- */
+declare(strict_types=1);
 
 namespace Rinvex\Fort\Traits;
-
-use Rinvex\Fort\Models\Ability;
 
 trait HasAbilities
 {
@@ -76,7 +63,7 @@ trait HasAbilities
     protected function setAbilities($action, $resource, string $process)
     {
         // Guess event name
-        $event = $process == 'syncWithoutDetaching' ? 'attach' : $process;
+        $event = $process === 'syncWithoutDetaching' ? 'attach' : $process;
 
         // If the "attaching/syncing/detaching" event returns false we'll cancel this operation and
         // return false, indicating that the attaching/syncing/detaching failed. This provides a
@@ -86,7 +73,7 @@ trait HasAbilities
         }
 
         // Ability model
-        $model = Ability::query();
+        $model = app('rinvex.fort.ability')->query();
 
         if (is_string($action) && $action !== '*') {
             $model->where('action', $action);

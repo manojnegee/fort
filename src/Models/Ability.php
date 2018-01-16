@@ -1,24 +1,14 @@
 <?php
 
-/*
- * NOTICE OF LICENSE
- *
- * Part of the Rinvex Fort Package.
- *
- * This source file is subject to The MIT License (MIT)
- * that is bundled with this package in the LICENSE file.
- *
- * Package: Rinvex Fort Package
- * License: The MIT License (MIT)
- * Link:    https://rinvex.com
- */
+declare(strict_types=1);
 
 namespace Rinvex\Fort\Models;
 
-use Watson\Validating\ValidatingTrait;
-use Rinvex\Cacheable\CacheableEloquent;
 use Illuminate\Database\Eloquent\Model;
-use Spatie\Translatable\HasTranslations;
+use Rinvex\Cacheable\CacheableEloquent;
+use Rinvex\Fort\Contracts\AbilityContract;
+use Rinvex\Support\Traits\HasTranslations;
+use Rinvex\Support\Traits\ValidatingTrait;
 
 /**
  * Rinvex\Fort\Models\Ability.
@@ -27,27 +17,27 @@ use Spatie\Translatable\HasTranslations;
  * @property string                                                                   $action
  * @property string                                                                   $resource
  * @property string                                                                   $policy
- * @property string                                                                   $name
- * @property string                                                                   $description
- * @property \Carbon\Carbon                                                           $created_at
- * @property \Carbon\Carbon                                                           $updated_at
- * @property \Carbon\Carbon                                                           $deleted_at
- * @property-read \Illuminate\Database\Eloquent\Collection|\Rinvex\Fort\Models\Role[] $roles
+ * @property array                                                                    $name
+ * @property array                                                                    $description
+ * @property \Carbon\Carbon|null                                                      $created_at
+ * @property \Carbon\Carbon|null                                                      $updated_at
+ * @property \Carbon\Carbon|null                                                      $deleted_at
+ * @property-read string                                                              $slug
+ * @property \Illuminate\Database\Eloquent\Collection|\Rinvex\Fort\Models\Role[]      $roles
  * @property-read \Illuminate\Database\Eloquent\Collection|\Rinvex\Fort\Models\User[] $users
- * @property-read bool                                                                $slug
  *
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Ability whereId($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Ability whereAction($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Ability whereResource($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Ability wherePolicy($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Ability whereTitle($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Ability whereDescription($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Ability whereCreatedAt($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Ability whereUpdatedAt($value)
- * @method static \Illuminate\Database\Query\Builder|\Rinvex\Fort\Models\Ability whereDeletedAt($value)
- * @mixin \Illuminate\Database\Eloquent\Model
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Ability whereAction($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Ability whereCreatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Ability whereDeletedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Ability whereDescription($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Ability whereId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Ability whereName($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Ability wherePolicy($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Ability whereResource($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\Rinvex\Fort\Models\Ability whereUpdatedAt($value)
+ * @mixin \Eloquent
  */
-class Ability extends Model
+class Ability extends Model implements AbilityContract
 {
     use HasTranslations;
     use ValidatingTrait;
@@ -57,17 +47,35 @@ class Ability extends Model
      * {@inheritdoc}
      */
     protected $fillable = [
+        'name',
         'action',
         'resource',
         'policy',
-        'name',
         'description',
+        'roles',
     ];
 
     /**
      * {@inheritdoc}
      */
-    protected $observables = ['validating', 'validated'];
+    protected $casts = [
+        'action' => 'string',
+        'resource' => 'string',
+        'policy' => 'string',
+        'deleted_at' => 'datetime',
+    ];
+
+    /**
+     * {@inheritdoc}
+     */
+    protected $observables = [
+        'attaching',
+        'attached',
+        'detaching',
+        'detached',
+        'validating',
+        'validated',
+    ];
 
     /**
      * The attributes that are translatable.
@@ -95,7 +103,8 @@ class Ability extends Model
     ];
 
     /**
-     * Whether the model should throw a ValidationException if it fails validation.
+     * Whether the model should throw a
+     * ValidationException if it fails validation.
      *
      * @var bool
      */
@@ -111,12 +120,41 @@ class Ability extends Model
         parent::__construct($attributes);
 
         $this->setTable(config('rinvex.fort.tables.abilities'));
-        $this->addObservableEvents(['attaching', 'attached', 'detaching', 'detached']);
         $this->setRules([
-            'name' => 'required',
-            'action' => 'required|unique:'.config('rinvex.fort.tables.abilities').',action,NULL,id,resource,'.$this->resource,
-            'resource' => 'required|unique:'.config('rinvex.fort.tables.abilities').',resource,NULL,id,action,'.$this->action,
+            'name' => 'required|string|max:150',
+            'action' => 'required|string|unique:'.config('rinvex.fort.tables.abilities').',action,NULL,id,resource,'.($this->resource ?? 'null'),
+            'resource' => 'required|string|unique:'.config('rinvex.fort.tables.abilities').',resource,NULL,id,action,'.($this->action ?? 'null'),
+            'policy' => 'nullable|string',
+            'description' => 'nullable|string|max:10000',
         ]);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::updated(function (self $ability) {
+            app('rinvex.fort.role')->forgetCache();
+            app('rinvex.fort.user')->forgetCache();
+        });
+
+        static::deleted(function (self $ability) {
+            app('rinvex.fort.role')->forgetCache();
+            app('rinvex.fort.user')->forgetCache();
+        });
+
+        static::attached(function (self $ability) {
+            app('rinvex.fort.role')->forgetCache();
+            app('rinvex.fort.user')->forgetCache();
+        });
+
+        static::detached(function (self $ability) {
+            app('rinvex.fort.role')->forgetCache();
+            app('rinvex.fort.user')->forgetCache();
+        });
     }
 
     /**
@@ -185,32 +223,10 @@ class Ability extends Model
      */
     public function users()
     {
-        return $this->belongsToMany(config('rinvex.fort.models.user'), config('rinvex.fort.tables.ability_user'), 'ability_id', 'user_id')
+        $userModel = config('auth.providers.'.config('auth.guards.'.config('auth.defaults.guard').'.provider').'.model');
+
+        return $this->belongsToMany($userModel, config('rinvex.fort.tables.ability_user'), 'ability_id', 'user_id')
                     ->withTimestamps();
-    }
-
-    /**
-     * Set the translatable name attribute.
-     *
-     * @param string $value
-     *
-     * @return void
-     */
-    public function setNameAttribute($value)
-    {
-        $this->attributes['name'] = json_encode(! is_array($value) ? [app()->getLocale() => $value] : $value);
-    }
-
-    /**
-     * Set the translatable description attribute.
-     *
-     * @param string $value
-     *
-     * @return void
-     */
-    public function setDescriptionAttribute($value)
-    {
-        $this->attributes['description'] = ! empty($value) ? json_encode(! is_array($value) ? [app()->getLocale() => $value] : $value) : null;
     }
 
     /**
@@ -236,7 +252,7 @@ class Ability extends Model
     /**
      * Get slug attribute out of ability's action & resource.
      *
-     * @return bool
+     * @return string
      */
     public function getSlugAttribute()
     {
@@ -244,49 +260,16 @@ class Ability extends Model
     }
 
     /**
-     * Prepare a unique rule, adding the table name, column and model indetifier
-     * if required.
+     * Attach the ability roles.
      *
-     * @param array  $parameters
-     * @param string $field
+     * @param mixed $roles
      *
-     * @return string
+     * @return void
      */
-    protected function prepareUniqueRule($parameters, $field)
+    public function setRolesAttribute($roles)
     {
-        // If the table name isn't set, infer it.
-        if (empty($parameters[0])) {
-            $parameters[0] = $this->getModel()->getTable();
-        }
-
-        // If the connection name isn't set but exists, infer it.
-        if ((strpos($parameters[0], '.') === false) && (($connectionName = $this->getModel()->getConnectionName()) !== null)) {
-            $parameters[0] = $connectionName.'.'.$parameters[0];
-        }
-
-        // If the field name isn't get, infer it.
-        if (! isset($parameters[1])) {
-            $parameters[1] = $field;
-        }
-
-        if ($this->exists) {
-            // If the identifier isn't set, infer it.
-            if (! isset($parameters[2]) || strtolower($parameters[2]) === 'null') {
-                $parameters[2] = $this->getModel()->getKey();
-            }
-
-            // If the primary key isn't set, infer it.
-            if (! isset($parameters[3])) {
-                $parameters[3] = $this->getModel()->getKeyName();
-            }
-
-            foreach ($parameters as $key => $parameter) {
-                if (strtolower($parameter) === 'null') {
-                    $parameters[$key] = $this->getModel()->{$parameters[$key - 1]};
-                }
-            }
-        }
-
-        return 'unique:'.implode(',', $parameters);
+        static::saved(function (self $model) use ($roles) {
+            $model->roles()->sync($roles);
+        });
     }
 }
